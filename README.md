@@ -1,0 +1,11 @@
+Project Crystal Server
+========
+Welcome to the Project Crystal Server; a server emulator for PlayOnline.
+
+Pull Requests
+========
+Commits should contain a descriptive name for what you are modifying
+
+Remember to check back for any feedback, and drop a comment once requested changes have been made (if there are any).
+
+Please *test your code* before committing changes/submitting a pull request.
