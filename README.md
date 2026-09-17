@@ -1,6 +1,6 @@
 Project Crystal Server
 ========
-Welcome to the Project Crystal Server; a server emulator for PlayOnline.
+Welcome to the Project Crystal Server; a server emulator for PlayOnline and some of it's dead games.
 
 Pull Requests
 ========
