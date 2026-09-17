@@ -1,0 +1,197 @@
+#!/usr/bin/env bash
+
+# Exit immediately if a command exits with a non-zero status, 
+# treating unset variables as an error during service setup.
+set -euo pipefail
+
+# Dynamic Directory Tracking: Resolves the canonical folder containing THIS script
+# even if called remotely or executed through a global /usr/local/bin symlink.
+TARGET_FILE="${BASH_SOURCE[0]}"
+while [ -L "$TARGET_FILE" ]; do
+    BINARY_DIR="$(cd -P "$(dirname "$TARGET_FILE")" && pwd)"
+    TARGET_FILE="$(readlink "$TARGET_FILE")"
+    [[ $TARGET_FILE != /* ]] && TARGET_FILE="$BINARY_DIR/$TARGET_FILE"
+done
+BINARY_DIR="$(cd -P "$(dirname "$TARGET_FILE")" && pwd)"
+
+# Helper functions to print clean console alerts
+log_info() {
+    echo -e "\e[34m[INFO]\e[0m $1"
+}
+
+log_error() {
+    echo -e "\e[31m[ERROR]\e[0m $1" >&2
+}
+
+# Print the dynamic usage guide
+print_usage() {
+    echo "Usage: $0 <auth | profile | patch> [install-service | remove-service | start | stop | restart]"
+    echo "       $0 <command to auth server>"
+}
+
+# Safeguard check to ensure script execution targets a valid command parameter
+if [ $# -lt 1 ]; then
+    print_usage
+    exit 1
+fi
+
+TARGET_MODULE="$1"
+
+if [[ "$TARGET_MODULE" != "auth" && "$TARGET_MODULE" != "profile" && "$TARGET_MODULE" != "patch" ]]; then
+    if [ $# -eq 1 ]; then
+        print_usage
+        exit 1
+    fi
+fi
+
+# Map target keywords into precise system variables
+case "$TARGET_MODULE" in
+    "auth")
+        SERVICE_NAME="POLAuth"
+        DESCRIPTION="PlayOnline Authentication Daemon"
+        SYSLOG_ID="polauth"
+        HAS_PASSTHROUGH=true
+        shift # Pop 'auth' from arguments list
+        ;;
+    "profile")
+        SERVICE_NAME="POLProfile"
+        DESCRIPTION="PlayOnline Profile Daemon"
+        SYSLOG_ID="polprofile"
+        HAS_PASSTHROUGH=false
+        shift # Pop 'profile' from arguments list
+        ;;
+    "patch")
+        SERVICE_NAME="POLPatch"
+        DESCRIPTION="PlayOnline Patch Daemon"
+        SYSLOG_ID="polpatch"
+        HAS_PASSTHROUGH=false
+        shift # Pop 'patch' from arguments list
+        ;;
+    *)
+        # Implicit routing to POLAuth if the user types a command line right away
+        SERVICE_NAME="POLAuth"
+        DESCRIPTION="PlayOnline Authentication Daemon"
+        SYSLOG_ID="polauth"
+        HAS_PASSTHROUGH=true
+        # Do NOT shift, since the first parameter is the explicit command to execute
+        ;;
+esac
+
+# Read the targeted sub-command out of the remaining stacked arguments array
+if [ $# -lt 1 ]; then
+    log_error "Missing parameter command for ${SERVICE_NAME}."
+    print_usage
+    exit 1
+fi
+
+COMMAND="$1"
+SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+BINARY_PATH="${BINARY_DIR}/${SERVICE_NAME}"
+
+case "$COMMAND" in
+    "install-service")
+        log_info "Initializing systemd installation layout for ${SERVICE_NAME}..."
+                
+        if [ "$EUID" -ne 0 ]; then
+            log_error "Please re-run install-service using sudo privileges."
+            exit 1
+        fi
+
+        if [ ! -f "$BINARY_PATH" ]; then
+            log_error "Executable binary not found at ${BINARY_PATH}. Please deploy your published files first."
+            exit 1
+        fi
+
+        log_info "Writing unit file parameters to ${SERVICE_FILE}..."
+        cat <<EOF > "$SERVICE_FILE"
+[Unit]
+Description=${DESCRIPTION}
+After=network.target mariadb.service
+
+[Service]
+Type=notify
+WorkingDirectory=${BINARY_DIR}
+ExecStart=${BINARY_PATH}
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+SyslogIdentifier=${SYSLOG_ID}
+StandardOutput=null
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+        log_info "Registering service manifest and loading daemon allocations..."
+        systemctl daemon-reload
+        systemctl enable "${SERVICE_NAME}.service"
+        systemctl start "${SERVICE_NAME}.service"
+                
+        log_info "Service successfully created and initiated!"
+        systemctl status "${SERVICE_NAME}.service" --no-pager -n 2
+        ;;
+
+    "remove-service")
+        log_info "Tearing down systemd allocations for ${SERVICE_NAME}..."
+                
+        if [ "$EUID" -ne 0 ]; then
+            log_error "Please re-run remove-service using sudo privileges."
+            exit 1
+        fi
+
+        if [ -f "$SERVICE_FILE" ]; then
+            log_info "Halting background processing hooks..."
+            systemctl stop "${SERVICE_NAME}.service" >/dev/null 2>&1 || true
+            systemctl disable "${SERVICE_NAME}.service" >/dev/null 2>&1 || true
+                        
+            log_info "Purging unit configuration file..."
+            rm -f "$SERVICE_FILE"
+            systemctl daemon-reload
+            log_info "Service clean-up complete."
+        else
+            log_info "Target file configuration does not exist at ${SERVICE_FILE}. Skipping."
+        fi
+        ;;
+
+    "start")
+        if [ "$EUID" -ne 0 ]; then
+            log_error "Please run 'start' using sudo privileges."
+            exit 1
+        fi
+        systemctl start "$SERVICE_NAME" >/dev/null 2>&1
+        ;;
+
+    "stop")
+        if [ "$EUID" -ne 0 ]; then
+            log_error "Please run 'stop' using sudo privileges."
+            exit 1
+        fi
+        systemctl stop "$SERVICE_NAME" >/dev/null 2>&1
+        ;;
+
+    "restart")
+        if [ "$EUID" -ne 0 ]; then
+            log_error "Please run 'restart' using sudo privileges."
+            exit 1
+        fi
+        systemctl restart "$SERVICE_NAME" >/dev/null 2>&1
+        ;;
+
+    *)
+        # Check if the target selected allows command string passthroughs
+        if [ "$HAS_PASSTHROUGH" = false ]; then
+            log_error "Unknown command '$COMMAND' for module ${SERVICE_NAME}."
+            echo "Usage: $0 ${TARGET_MODULE} [install-service | remove-service | start | stop | restart]"
+            exit 1
+        fi
+
+        # Execute target checks on the implied POLAuth path
+        if [ ! -f "$BINARY_PATH" ]; then
+            log_error "Cannot process control execution block. Binary missing at ${BINARY_PATH}"
+            exit 1
+        fi
+                
+        # Forward everything natively to the underlying named pipe abstraction layer
+        exec "$BINARY_PATH" --control "$@"
+        ;;
+esac

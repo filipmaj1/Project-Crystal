@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "FMOServer": {
+      "commandName": "Project",
+      "commandLineArgs": "20560 M"
+    }
+  }
+}

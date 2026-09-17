@@ -1,0 +1,79 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Crystal.POLPatch</RootNamespace>
+    <OutputPath>$(SolutionDir)\Build\$(Configuration)\POLPatch\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+
+    <Platforms>AnyCPU;x86;x64</Platforms>
+    <Configurations>Debug;Release</Configurations>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x86'">
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x86'">
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="NLog.config" />
+    <Content Include="polpatch.cfg" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Cyotek.CircularBuffer" Version="1.2.1" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" Version="10.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.8" />
+    <PackageReference Include="NLog" Version="5.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\POLCommon\Common Class Lib.csproj" />
+  </ItemGroup>
+
+  <Target Name="ForceLowercaseBinary" AfterTargets="Publish" Outputs="ForceExecution">
+
+    <PropertyGroup>
+      <CurrentWorkingDir Condition="'$(PublishDir)' != ''">$(PublishDir)</CurrentWorkingDir>
+      <CurrentWorkingDir Condition="'$(PublishDir)' == ''">$(OutputPath)</CurrentWorkingDir>
+
+      <NormalizedDir Condition="!HasTrailingSlash('$(CurrentWorkingDir)')">$(CurrentWorkingDir)\</NormalizedDir>
+      <NormalizedDir Condition="HasTrailingSlash('$(CurrentWorkingDir)')">$(CurrentWorkingDir)</NormalizedDir>
+
+      <SrcExe>$(NormalizedDir)$(TargetName).exe</SrcExe>
+      <DstExe>$(NormalizedDir)$(TargetName.ToLower()).exe</DstExe>
+
+      <SrcLinux>$(NormalizedDir)$(TargetName)</SrcLinux>
+      <DstLinux>$(NormalizedDir)$(TargetName.ToLower())</DstLinux>
+    </PropertyGroup>
+
+    <Move Condition="Exists('$(SrcExe)')" SourceFiles="$(SrcExe)" DestinationFiles="$(DstExe)" OverwriteReadOnlyFiles="true" />
+    <Move Condition="Exists('$(SrcLinux)')" SourceFiles="$(SrcLinux)" DestinationFiles="$(DstLinux)" OverwriteReadOnlyFiles="true" />
+
+    <Message Importance="Normal" Text="[POST-BUILD] Renamed to lowercase: $(NormalizedDir)" />
+  </Target>
+
+</Project>

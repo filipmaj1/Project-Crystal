@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "POLPatch": {
+      "commandName": "Project",
+      "workingDirectory": "D:\\Coding\\project-crystal-server\\Build\\Release\\POLPatch\\"
+    }
+  }
+}
